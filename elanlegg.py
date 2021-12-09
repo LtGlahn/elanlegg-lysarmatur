@@ -1,15 +1,19 @@
 from json.encoder import JSONEncoder
 import pdb
 import json
+from datetime import datetime
 
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, wkb 
 from shapely.geometry import LineString 
 
-import lokal_STARTHER
-import nvdbapiv3
-import nvdbgeotricks 
+from nvdbapiv3 import nvdbFagdata,  nvdbfagdata2records
+# import nvdbgeotricks 
+
+    # nvdbgeotricks.records2gpkg( nvdbfagdata2records( alleElanlegg,     geometri=True), filnavn, 'elanlegg' )
+    # nvdbgeotricks.records2gpkg( nvdbfagdata2records( alleLysArmaturer, geometri=True), filnavn, 'lysarmatur' )
+
 
 def finnLysarmatur( relasjonstre, egenskaper=None ): 
     """
@@ -47,11 +51,14 @@ alleElanlegg = []
 alleLysArmaturer = []
 
 if __name__ == '__main__': 
-    elsok = nvdbapiv3.nvdbFagdata( 461 )
+
+    t0 = datetime.now()
+
+    elsok = nvdbFagdata( 461 )
     # elsok.filter( { 'kartutsnitt' : '129068.662,6819071.488,307292.352,6909072.335' }) # Stort kartutsnitt
     # elsok.filter( { 'kartutsnitt' : '198660.802,6752983.43,262372.596,6784775.827' })
     # elsok.filter( { 'kartutsnitt' : '231915.469,6754412.201,232089.515,6754500.093' }) # Bitteliten flekk med 1 anlegg 
-    # elsok.filter( { 'kommune' : 3048  })
+    elsok.filter( { 'kommune' : 3048  })
 
     elsok.statistikk()
     
@@ -105,7 +112,7 @@ if __name__ == '__main__':
                 lysarmaturer = []
                 if 'relasjoner' in elanlegg and 'barn' in elanlegg['relasjoner']: 
                     mineLys =  finnLysarmatur( elanlegg['relasjoner']['barn'], egenskaper=arveEgenskaper )
-                    mineLysDf = pd.DataFrame( nvdbapiv3.nvdbfagdata2records( mineLys, vegsegmenter=False ))
+                    mineLysDf = pd.DataFrame( nvdbfagdata2records( mineLys, vegsegmenter=False ))
                     # Summer og aggregerer! 
                     elanlegg['egenskaper'].append( { 'id' : -5, 'navn' : 'Antall NVDB-objekter lysarmatur', 'verdi' : len( mineLys ),       'egenskapstype' : 'Heltall' }   )
                     if len( mineLysDf ) > 0 and 'Effekt' in mineLysDf.columns: 
@@ -120,10 +127,10 @@ if __name__ == '__main__':
                 print( 'ubrukelig elanlegg-objekt:', json.dumps( elanlegg, indent=4))
 
     # Knar på elanlegg-data
-    eldf  = pd.DataFrame( nvdbapiv3.nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True ))
+    eldf  = pd.DataFrame( nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True ))
     eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbId'].astype(str) + ':' + eldf['objekttype'].astype(str)
     eldf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
-    lysdf = pd.DataFrame( nvdbapiv3.nvdbfagdata2records( alleLysArmaturer, vegsegmenter=False, geometri=True ))
+    lysdf = pd.DataFrame( nvdbfagdata2records( alleLysArmaturer, vegsegmenter=False, geometri=True ))
     lysdf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + lysdf['nvdbId'].astype(str) + ':' + lysdf['objekttype'].astype(str)
     lysdf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
 
@@ -139,8 +146,8 @@ if __name__ == '__main__':
     # lysGdf.to_file( filnavn, layer='lysarmatur', driver='GPKG')
 
 
-    # nvdbgeotricks.records2gpkg( nvdbapiv3.nvdbfagdata2records( alleElanlegg,     geometri=True), filnavn, 'elanlegg' )
-    # nvdbgeotricks.records2gpkg( nvdbapiv3.nvdbfagdata2records( alleLysArmaturer, geometri=True), filnavn, 'lysarmatur' )
+    # nvdbgeotricks.records2gpkg( nvdbfagdata2records( alleElanlegg,     geometri=True), filnavn, 'elanlegg' )
+    # nvdbgeotricks.records2gpkg( nvdbfagdata2records( alleLysArmaturer, geometri=True), filnavn, 'lysarmatur' )
 
     # Lager fancy kartvisning med linje fra lysarmatur => El.anlegg
     # For å tvinge 2D-geometri bruker vi tricks med wkb.loads( wkb.dumps( GEOM, output_dimension=2 ))
@@ -155,14 +162,17 @@ if __name__ == '__main__':
     if 'relasjoner' in minGdf.columns:
         minGdf.drop( 'relasjoner', 1, inplace=True)
     
-    # minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
+    minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
-  # Lagrer til excel 
-    # with pd.ExcelWriter( 'elanlegg_lysarmatur_Norge.xlsx') as writer: 
+    #  Lagrer til excel 
+    with pd.ExcelWriter( 'elanlegg_lysarmatur_Norge.xlsx') as writer: 
 
-    #     # Fjerner geometrikolonner fra excel 
-    #     col_eldf = [ x for x in list( eldf.columns)  if not 'geom' in x.lower()  ]
-    #     col_lys =  [ x for x in list( lysdf.columns) if not 'geom' in x.lower() ]
-    #     eldf[ col_eldf ].to_excel( writer, sheet_name='Elektrisk anlegg',  index=False )
-    #     lysdf[ col_lys ].to_excel( writer, sheet_name='Lysarmatur',        index=False )
+        # Fjerner geometrikolonner fra excel 
+        col_eldf = [ x for x in list( eldf.columns)  if not 'geom' in x.lower()  ]
+        col_lys =  [ x for x in list( lysdf.columns) if not 'geom' in x.lower() ]
+        eldf[ col_eldf ].to_excel( writer, sheet_name='Elektrisk anlegg',  index=False )
+        lysdf[ col_lys ].to_excel( writer, sheet_name='Lysarmatur',        index=False )
 
+
+    dT = datetime.now() - t0
+    print( f"Tidsbruk: { round( dT.total_seconds(), 1)} sekunder" )
