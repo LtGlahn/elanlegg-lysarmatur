@@ -48,10 +48,11 @@ alleLysArmaturer = []
 
 if __name__ == '__main__': 
     elsok = nvdbapiv3.nvdbFagdata( 461 )
+    # elsok.filter( { 'kartutsnitt' : '276891.64,6654048.52,280547.83,6656183.06' }) # Debug Kjeller skole 
     # elsok.filter( { 'kartutsnitt' : '129068.662,6819071.488,307292.352,6909072.335' }) # Stort kartutsnitt
     # elsok.filter( { 'kartutsnitt' : '198660.802,6752983.43,262372.596,6784775.827' })
     # elsok.filter( { 'kartutsnitt' : '231915.469,6754412.201,232089.515,6754500.093' }) # Bitteliten flekk med 1 anlegg 
-    # elsok.filter( { 'kommune' : 3048  })
+    # elsok.filter( { 'kommune' : 3048  }) , 
 
     elsok.statistikk()
     
@@ -129,18 +130,15 @@ if __name__ == '__main__':
 
 
     # Lagrer til geopackage 
-    filnavn = 'elanlegg_Norge.gpkg'
+    filnavn = 'elanlegg_norge.gpkg'
+
     eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
     elGdf = gpd.GeoDataFrame(  eldf, geometry='geometry', crs=5973  )
-    # elGdf.to_file( filnavn, layer='elanlegg', driver='GPKG')
+    elGdf.to_file( filnavn, layer='elanlegg', driver='GPKG')
 
     lysdf['geometry'] = lysdf['geometri'].apply( lambda x : wkt.loads( x ))
     lysGdf = gpd.GeoDataFrame(  lysdf, geometry='geometry', crs=5973  )
-    # lysGdf.to_file( filnavn, layer='lysarmatur', driver='GPKG')
-
-
-    # nvdbgeotricks.records2gpkg( nvdbapiv3.nvdbfagdata2records( alleElanlegg,     geometri=True), filnavn, 'elanlegg' )
-    # nvdbgeotricks.records2gpkg( nvdbapiv3.nvdbfagdata2records( alleLysArmaturer, geometri=True), filnavn, 'lysarmatur' )
+    lysGdf.to_file( filnavn, layer='lysarmatur', driver='GPKG')
 
     # Lager fancy kartvisning med linje fra lysarmatur => El.anlegg
     # For å tvinge 2D-geometri bruker vi tricks med wkb.loads( wkb.dumps( GEOM, output_dimension=2 ))
@@ -155,7 +153,7 @@ if __name__ == '__main__':
     if 'relasjoner' in minGdf.columns:
         minGdf.drop( 'relasjoner', 1, inplace=True)
     
-    # minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
+    minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
   # Lagrer til excel 
     # with pd.ExcelWriter( 'elanlegg_lysarmatur_Norge.xlsx') as writer: 
