@@ -8,7 +8,7 @@ import geopandas as gpd
 from shapely import wkt, wkb 
 from shapely.geometry import LineString 
 
-from nvdbapiv3 import nvdbFagdata,  nvdbfagdata2records
+from nvdbapiv3 import esriSikkerTekst, nvdbFagdata,  nvdbfagdata2records
 # import nvdbgeotricks 
 
     # nvdbgeotricks.records2gpkg( nvdbfagdata2records( alleElanlegg,     geometri=True), filnavn, 'elanlegg' )
@@ -50,15 +50,32 @@ def finnLysarmatur( relasjonstre, egenskaper=None ):
 alleElanlegg = []
 alleLysArmaturer = []
 
+def byttKolonneNavn( myDf ): 
+    """
+    Bytter ut spesialtegn i kolonnenanvn med esriSikkerTekst 
+    """
+
+    skiftUt = { }
+
+    for col in list( myDf.columns): 
+        nyCol = esriSikkerTekst( col)
+        if nyCol != col: 
+            skiftUt[col] = nyCol
+
+    myDf.rename( columns=skiftUt, inplace=True )
+    return myDf 
+
 if __name__ == '__main__': 
 
     t0 = datetime.now()
+    minCRS = 4326
 
     elsok = nvdbFagdata( 461 )
     # elsok.filter( { 'kartutsnitt' : '129068.662,6819071.488,307292.352,6909072.335' }) # Stort kartutsnitt
     # elsok.filter( { 'kartutsnitt' : '198660.802,6752983.43,262372.596,6784775.827' })
     # elsok.filter( { 'kartutsnitt' : '231915.469,6754412.201,232089.515,6754500.093' }) # Bitteliten flekk med 1 anlegg 
     elsok.filter( { 'kommune' : 3048  })
+    elsok.filter( { 'srid' : minCRS  })
 
     elsok.statistikk()
     
@@ -127,22 +144,23 @@ if __name__ == '__main__':
                 print( 'ubrukelig elanlegg-objekt:', json.dumps( elanlegg, indent=4))
 
     # Knar på elanlegg-data
-    eldf  = pd.DataFrame( nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True ))
+    eldf  = byttKolonneNavn( pd.DataFrame( nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True )) )
     eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbId'].astype(str) + ':' + eldf['objekttype'].astype(str)
     eldf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
-    lysdf = pd.DataFrame( nvdbfagdata2records( alleLysArmaturer, vegsegmenter=False, geometri=True ))
+    lysdf = byttKolonneNavn( pd.DataFrame( nvdbfagdata2records( alleLysArmaturer, vegsegmenter=False, geometri=True )) )
     lysdf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + lysdf['nvdbId'].astype(str) + ':' + lysdf['objekttype'].astype(str)
     lysdf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
+    
 
 
     # Lagrer til geopackage 
     filnavn = 'elanlegg_Norge.gpkg'
     eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
-    elGdf = gpd.GeoDataFrame(  eldf, geometry='geometry', crs=5973  )
+    elGdf = gpd.GeoDataFrame(  eldf, geometry='geometry', crs=minCRS  )
     # elGdf.to_file( filnavn, layer='elanlegg', driver='GPKG')
 
     lysdf['geometry'] = lysdf['geometri'].apply( lambda x : wkt.loads( x ))
-    lysGdf = gpd.GeoDataFrame(  lysdf, geometry='geometry', crs=5973  )
+    lysGdf = gpd.GeoDataFrame(  lysdf, geometry='geometry', crs=minCRS  )
     # lysGdf.to_file( filnavn, layer='lysarmatur', driver='GPKG')
 
 
@@ -155,7 +173,7 @@ if __name__ == '__main__':
                                                              wkb.loads( wkb.dumps( wkt.loads( x['ElAnlegg_geom']), output_dimension=2 ))  ] 
                                     ) , axis=1)
 
-    minGdf = gpd.GeoDataFrame( lysdf, geometry='geometry', crs=5973 )       
+    minGdf = gpd.GeoDataFrame( lysdf, geometry='geometry', crs=minCRS )       
     # må droppe kolonne vegsegmenter hvis data er hentet med vegsegmenter=False 
     if 'vegsegmenter' in minGdf.columns:
         minGdf.drop( 'vegsegmenter', 1, inplace=True)
