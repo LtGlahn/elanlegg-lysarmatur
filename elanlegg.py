@@ -143,6 +143,8 @@ if __name__ == '__main__':
             else: 
                 print( 'ubrukelig elanlegg-objekt:', json.dumps( elanlegg, indent=4))
 
+    mineLysDf = byttKolonneNavn( mineLysDf )
+
     # Knar på elanlegg-data
     eldf  = byttKolonneNavn( pd.DataFrame( nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True )) )
     eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbId'].astype(str) + ':' + eldf['objekttype'].astype(str)
