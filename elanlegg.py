@@ -6,7 +6,7 @@ from datetime import datetime
 import pandas as pd
 import geopandas as gpd
 from shapely import wkt, wkb 
-from shapely.geometry import LineString 
+from shapely.geometry import LineString, Point 
 
 from nvdbapiv3 import esriSikkerTekst, nvdbFagdata,  nvdbfagdata2records
 # import nvdbgeotricks 
@@ -58,7 +58,15 @@ def byttKolonneNavn( myDf ):
     skiftUt = { }
 
     for col in list( myDf.columns): 
-        nyCol = esriSikkerTekst( col)
+        nyCol = esriSikkerTekst( col) \
+                .lower() \
+                .replace("æ", "ae") \
+                .replace("ø", "oe") \
+                .replace("å", "aa") \
+                .replace("Æ", "Ae")  \
+                .replace("Ø", "Oe")  \
+                .replace("Å", "Aa") 
+
         if nyCol != col: 
             skiftUt[col] = nyCol
 
@@ -83,11 +91,11 @@ if __name__ == '__main__':
     for elAnleggTreff in elsok: 
 
         counter += 1
-        if counter in [1, 5, 10, 50, 100, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 7500 ]: 
+        if counter in [1, 5, 10, 50, 100, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 7500 ] or counter % 10000 == 0: 
             print( f"Henter objekt {counter} av {elsok.antall} ")
 
         try: 
-            elanlegg = elsok.forbindelse.les( elAnleggTreff['href'], params={ 'dybde' : 4, 'inkluder' : 'alle'  }  ).json()
+            elanlegg = elsok.forbindelse.les( elAnleggTreff['href'], params={ 'dybde' : 4, 'inkluder' : 'alle', 'srid' : minCRS  }  ).json()
         except ValueError:
             pass
         else: 
@@ -147,22 +155,30 @@ if __name__ == '__main__':
 
     # Knar på elanlegg-data
     eldf  = byttKolonneNavn( pd.DataFrame( nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True )) )
-    eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbId'].astype(str) + ':' + eldf['objekttype'].astype(str)
+    eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbid'].astype(str) + ':' + eldf['objekttype'].astype(str)
     eldf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
     lysdf = byttKolonneNavn( pd.DataFrame( nvdbfagdata2records( alleLysArmaturer, vegsegmenter=False, geometri=True )) )
-    lysdf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + lysdf['nvdbId'].astype(str) + ':' + lysdf['objekttype'].astype(str)
+    lysdf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + lysdf['nvdbid'].astype(str) + ':' + lysdf['objekttype'].astype(str)
     lysdf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
     
 
 
     # Lagrer til geopackage 
     filnavn = 'elanlegg_Norge.gpkg'
-    eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
+    eldf['geometry'] = eldf['geometri'].apply( lambda x : Point ( wkb.loads( wkb.dumps( wkt.loads( x ), output_dimension=2  ))))
+    # Fjerner egengeometri og alle wkt-strenger med geometri, det bare forvirrer
+    # Hvis vi trenger wkt-streng så oppretter vi det fra "geometry"-kolonnen (shapely-objekter)
+    eldf.drop(  columns=['geometri', 'geometri_punkt'], inplace=True   )
+
     elGdf = gpd.GeoDataFrame(  eldf, geometry='geometry', crs=minCRS  )
+
     # elGdf.to_file( filnavn, layer='elanlegg', driver='GPKG')
 
-    lysdf['geometry'] = lysdf['geometri'].apply( lambda x : wkt.loads( x ))
-    lysGdf = gpd.GeoDataFrame(  lysdf, geometry='geometry', crs=minCRS  )
+    # lysdf['geometry'] = lysdf['geometri'].apply( lambda x : Point ( wkb.loads( wkb.dumps( wkt.loads( x ), output_dimension=2  ))))
+    lysdf.drop(  columns=[ 'geometri_punkt'], inplace=True   )
+    lysdf.rename( columns={ 'geometri' : 'lysarmatur_geom'  }, inplace=True )
+
+    # lysGdf = gpd.GeoDataFrame(  lysdf, geometry='geometry', crs=minCRS  )
     # lysGdf.to_file( filnavn, layer='lysarmatur', driver='GPKG')
 
 
@@ -171,9 +187,8 @@ if __name__ == '__main__':
 
     # Lager fancy kartvisning med linje fra lysarmatur => El.anlegg
     # For å tvinge 2D-geometri bruker vi tricks med wkb.loads( wkb.dumps( GEOM, output_dimension=2 ))
-    lysdf['geometry'] = lysdf.apply( lambda x: LineString( [ wkb.loads( wkb.dumps( wkt.loads( x['geometri']),      output_dimension=2 )), 
-                                                             wkb.loads( wkb.dumps( wkt.loads( x['ElAnlegg_geom']), output_dimension=2 ))  ] 
-                                    ) , axis=1)
+    lysdf['geometry'] = lysdf.apply( lambda x: LineString( [  wkb.loads( wkb.dumps( wkt.loads (x['lysarmatur_geom']    ), output_dimension=2)), 
+                                                              wkb.loads( wkb.dumps( wkt.loads( x['elanlegg_geom']), output_dimension=2 )) ] ), axis=1) 
 
     minGdf = gpd.GeoDataFrame( lysdf, geometry='geometry', crs=minCRS )       
     # må droppe kolonne vegsegmenter hvis data er hentet med vegsegmenter=False 
@@ -181,7 +196,9 @@ if __name__ == '__main__':
         minGdf.drop( 'vegsegmenter', 1, inplace=True)
     if 'relasjoner' in minGdf.columns:
         minGdf.drop( 'relasjoner', 1, inplace=True)
-    
+
+
+
     minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
     #  Lagrer til excel 
