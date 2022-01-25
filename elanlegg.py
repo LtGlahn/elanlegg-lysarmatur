@@ -207,6 +207,9 @@ if __name__ == '__main__':
 
     mineLysDf['wkt_geom'] = mineLysDf['geometry'].apply( lambda x : x.wkt )
 
+    mineLysDf['armatur_geom']  = mineLysDf['armatur_geom'].apply(  lambda x : wkt.dumps( wkb.loads( wkb.dumps( wkt.loads( x ) , output_dimension=2 ))))
+    mineLysDf['elanlegg_geom'] = mineLysDf['elanlegg_geom'].apply( lambda x : wkt.dumps( wkb.loads( wkb.dumps( wkt.loads( x ) , output_dimension=2 ))))
+
     minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
     #  Lagrer til excel 
