@@ -198,6 +198,14 @@ if __name__ == '__main__':
         minGdf.drop( 'relasjoner', 1, inplace=True)
 
 
+    # Pynter på mineLysDf 
+    mineLysDf.rename( columns={'geometri' : 'armatur_geom'}, inplace=True) 
+    mineLysDf.drop( columns=[ 'vegsegmenter', 'relasjoner'], inplace=True )
+    mineLysDf['geometry'] = mineLysDf.apply( lambda x: \
+        LineString( [  wkb.loads( wkb.dumps( wkt.loads (x['armatur_geom']    ), output_dimension=2)), 
+                       wkb.loads( wkb.dumps( wkt.loads( x['elanlegg_geom']), output_dimension=2 )) ] ), axis=1) 
+
+    mineLysDf['wkt_geom'] = mineLysDf['geometry'].apply( lambda x : x.wkt )
 
     minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
