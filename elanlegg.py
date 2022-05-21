@@ -130,7 +130,9 @@ if __name__ == '__main__':
 
 
     # Lagrer til geopackage 
-    filnavn = 'elanlegg_norge.gpkg'
+    # mappenavn = '/var/www/html/nvdbdata/elanlegg-lysarmatur/'
+    mappenavn = ''
+    filnavn = mappenavn + 'elanlegg_norge.gpkg'
 
     eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
     elGdf = gpd.GeoDataFrame(  eldf, geometry='geometry', crs=5973  )
