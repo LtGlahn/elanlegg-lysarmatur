@@ -176,9 +176,7 @@ if __name__ == '__main__':
                 if len( tempBelPunkt ) == 1: 
                     tempBelPunkt = tempBelPunkt.iloc[0]
 
-
-
-                    if not 'foreldre' in tempBelPunkt['relasjoner'] or len( tempBelPunkt['relasjoner']['foreldre'] ) == 0: 
+                    if not isinstance( tempBelPunkt['relasjoner'], float) or not 'foreldre' in tempBelPunkt['relasjoner'] or len( tempBelPunkt['relasjoner']['foreldre'] ) == 0: 
                         lysarmatur_relasjonsvurdering = 'Lysarmatur si mor er et bel.punkt uten foreldre'
                     elif len( armatur['relasjoner']['foreldre']) > 1: 
                         lysarmatur_relasjonsvurdering = f"Lysarmatur si mor er et bel.punkt med {len( tempBelPunkt['relasjoner']['foreldre'])} foreldrerelasjoner"
@@ -190,7 +188,7 @@ if __name__ == '__main__':
                         if len( tempBelStrek ) == 1: 
                             tempBelStrek = tempBelStrek.iloc[0]
 
-                            if not 'foreldre' in tempBelStrek['relasjoner'] or len( tempBelStrek['relasjoner']['foreldre']) == 0: 
+                            if not isinstance( tempBelStrek['relasjoner'], float) or not 'foreldre' in tempBelStrek['relasjoner'] or len( tempBelStrek['relasjoner']['foreldre']) == 0: 
                                 lysarmatur_relasjonsvurdering = 'Belysningsstrekning mangler foreldre'
                             elif  len( tempBelStrek['relasjoner']['foreldre']) > 1: 
                                 lysarmatur_relasjonsvurdering = f"Lysarmatur si mor er et bel.punkt med {len( tempBelStrek['relasjoner']['foreldre'])} foreldrerelasjoner"
