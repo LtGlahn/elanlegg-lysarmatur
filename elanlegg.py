@@ -48,11 +48,13 @@ alleLysArmaturer = []
 
 if __name__ == '__main__': 
     elsok = nvdbapiv3.nvdbFagdata( 461 )
-    # elsok.filter( { 'kartutsnitt' : '276891.64,6654048.52,280547.83,6656183.06' }) # Debug Kjeller skole 
-    # elsok.filter( { 'kartutsnitt' : '129068.662,6819071.488,307292.352,6909072.335' }) # Stort kartutsnitt
-    # elsok.filter( { 'kartutsnitt' : '198660.802,6752983.43,262372.596,6784775.827' })
-    # elsok.filter( { 'kartutsnitt' : '231915.469,6754412.201,232089.515,6754500.093' }) # Bitteliten flekk med 1 anlegg 
-    # elsok.filter( { 'kommune' : 3048  }) , 
+    mittfilter = {}
+    # mittfilter =  { 'kartutsnitt' : '276891.64,6654048.52,280547.83,6656183.06' } # Debug Kjeller skole 
+    # mittfilter =  { 'kartutsnitt' : '129068.662,6819071.488,307292.352,6909072.335' } # Stort kartutsnitt
+    # mittfilter =  { 'kartutsnitt' : '198660.802,6752983.43,262372.596,6784775.827' }
+    # mittfilter =  { 'kartutsnitt' : '231915.469,6754412.201,232089.515,6754500.093' } # Bitteliten flekk med 1 anlegg 
+    # mittfilter =   { 'kommune' : 3048  }) 
+    elsok.filter( mittfilter)
 
     elsok.statistikk()
     
@@ -114,6 +116,11 @@ if __name__ == '__main__':
 
                     lysarmaturer.extend( mineLys ) 
 
+                # Legger på fylke og kontraktsområde
+                elanlegg['egenskaper'].append( { 'id' : -7, 'navn' :  'Elanlegg_fylke', 'verdi' : elanlegg['lokasjon']['fylker'][0], 'egenskapstype' : 'Heltall' } )
+                elanlegg['egenskaper'].append( { 'id' : -8, 'navn' :  'Elanlegg_kontraktsomr', 
+                                                'verdi' : ','.join( [ x['navn'] for x in elanlegg['lokasjon']['kontraktsområder'] ] ), 'egenskapstype' : 'Tekst' } )
+
                 # Lagrer til mellomresultater
                 alleElanlegg.append( elanlegg )
                 alleLysArmaturer.extend( lysarmaturer )
@@ -121,6 +128,7 @@ if __name__ == '__main__':
                 print( 'ubrukelig elanlegg-objekt:', json.dumps( elanlegg, indent=4))
 
     # Knar på elanlegg-data
+    # Eget lag: Linje som viser kobling mellom armatur og elektrisk anlegg (du har med)
     eldf  = pd.DataFrame( nvdbapiv3.nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True ))
     eldf['vegkartlenke'] = 'https://vegkart.atlas.vegvesen.no/#valgt:' + eldf['nvdbId'].astype(str) + ':' + eldf['objekttype'].astype(str)
     eldf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
@@ -129,8 +137,95 @@ if __name__ == '__main__':
     lysdf.drop( columns=['vegsegmenter', 'relasjoner'], inplace=True )
 
 
+
+    # Eget lag: Belysningsstrekningen uten lysarmatur (Ny)
+
+    # Eget lag: Lysarmatur som ikke har kobling til elektrisk anlegg gjerne med informasjon om hva som mangler 
+    # tilsvarende skjermdumpen nedenfor (Ny)
+    # Henter alle lysarmaturer (med evt filter) 
+    print( "Henter alle lysarmaturer")
+    HeleNVDBLysarmatur = nvdbapiv3.nvdbFagdata( 88, filter=mittfilter).to_records( relasjoner=True )
+
+    # Henter alle belysningspunkt 
+    print( "Henter alle belysningspunkt")
+    HeleNVDBBelpunkt = pd.DataFrame( nvdbapiv3.nvdbFagdata( 87, filter=mittfilter ).to_records( relasjoner=True ))
+
+    # Henter alle belysningsstrekninger
+    print( "Henter alle belysningsstrekninger") 
+    HeleNVDBBelStrekning = pd.DataFrame( nvdbapiv3.nvdbFagdata( 86, filter=mittfilter ).to_records( 
+                                                        relasjoner=True, geometri=False, vegsegmenter=False ))
+
+
+    # Fjerner de lysarmaturene som vi vet om allerede (dvs der vi kjenner relasjon el.anlegg->lysarmatur 
+    # manglerMor = HELENVDBLysarmatur[ ~HELENVDBLysarmatur['nvdbId'].isin( lysdf['nvdbId']) ]
+    # Tygger oss gjennom relasjoner oppover fra lysarmatur
+    lysarmatur_mangler_elanlegg = []
+    for armatur in HeleNVDBLysarmatur: 
+        if armatur['nvdbId'] not in lysdf['nvdbId']: # Hopper over denna her hvis vi fant lysarmaturen i de relasjonstreene vi har analysert
+            
+            lysarmatur_relasjonsvurdering = 'ERROR - analyse av relasjoner feilet'
+            # Tygger oss gjennom relasjoner: 
+            if not 'foreldre' in armatur['relasjoner'] or len( armatur['relasjoner']['foreldre']) == 0: 
+                lysarmatur_relasjonsvurdering = 'Lysarmatur mangler foreldre'
+            elif len( armatur['relasjoner']['foreldre']) > 1: 
+                lysarmatur_relasjonsvurdering = f"Lysarmatur har {len( armatur['relasjoner']['foreldre'])} foreldrerelasjoner"
+            elif armatur['relasjoner']['foreldre'][0]['type']['navn'] == 'Belysningspunkt': 
+                # Analyserer relasjon fra bel.punkt og oppover 
+                tempBelPunkt = HeleNVDBBelpunkt[ HeleNVDBBelpunkt['nvdbId'] == armatur['relasjoner']['foreldre'][0]['vegobjekter'][0] ]
+
+                if len( tempBelPunkt ) == 1: 
+                    tempBelPunkt = tempBelPunkt.iloc[0]
+
+
+
+                    if not 'foreldre' in tempBelPunkt['relasjoner'] or len( tempBelPunkt['relasjoner']['foreldre'] ) == 0: 
+                        lysarmatur_relasjonsvurdering = 'Lysarmatur si mor er et bel.punkt uten foreldre'
+                    elif len( armatur['relasjoner']['foreldre']) > 1: 
+                        lysarmatur_relasjonsvurdering = f"Lysarmatur si mor er et bel.punkt med {len( tempBelPunkt['relasjoner']['foreldre'])} foreldrerelasjoner"
+                    elif tempBelPunkt['relasjoner']['foreldre'][0]['type']['navn'] == 'Belysningsstrekning': 
+                        # Analyser relasjoner fra belysningsstrekning og oppover 
+
+                        tempBelStrek = HeleNVDBBelStrekning[ HeleNVDBBelStrekning['nvdbId'] == tempBelPunkt['relasjoner']['foreldre'][0]['vegobjekter'][0] ] 
+
+                        if len( tempBelStrek ) == 1: 
+                            tempBelStrek = tempBelStrek.iloc[0]
+
+                            if not 'foreldre' in tempBelStrek['relasjoner'] or len( tempBelStrek['relasjoner']['foreldre']) == 0: 
+                                lysarmatur_relasjonsvurdering = 'Belysningsstrekning mangler foreldre'
+                            elif  len( tempBelStrek['relasjoner']['foreldre']) > 1: 
+                                lysarmatur_relasjonsvurdering = f"Lysarmatur si mor er et bel.punkt med {len( tempBelStrek['relasjoner']['foreldre'])} foreldrerelasjoner"
+
+                            else: 
+
+                                lysarmatur_relasjonsvurdering = 'Relasjon ' 
+                                lysarmatur_relasjonsvurdering += str(  tempBelStrek['relasjoner']['foreldre'][0]['type']['id'] ) 
+                                lysarmatur_relasjonsvurdering += ' ' 
+                                lysarmatur_relasjonsvurdering += tempBelStrek['relasjoner']['foreldre'][0]['type']['navn']
+                                lysarmatur_relasjonsvurdering += ' => 86 Belysningsstrekning => 87 Belysningspunkt => 88 Lysarmatur'
+
+                        else: 
+                            lysarmatur_relasjonsvurdering = 'Trøbbel med å finne mor-objekt til belysningspunkt'
+
+
+                    else: 
+                        lysarmatur_relasjonsvurdering = 'Relasjon ' 
+                        lysarmatur_relasjonsvurdering += str(  tempBelPunkt['relasjoner']['foreldre'][0]['type']['id'] ) 
+                        lysarmatur_relasjonsvurdering += ' ' 
+                        lysarmatur_relasjonsvurdering += tempBelPunkt['relasjoner']['foreldre'][0]['type']['navn']
+                        lysarmatur_relasjonsvurdering += '=> 87 Belysningspunkt => 88 Lysarmatur'
+
+            else: 
+                lysarmatur_relasjonsvurdering =  'Lysarmatur foreldrerelasjon:' + str(armatur['relasjoner']['foreldre'][0]['id']) + ' ' + armatur['relasjoner']['foreldre'][0]['type'] 
+
+            armatur['Lysarmatur_relasjonsvurdering'] =  lysarmatur_relasjonsvurdering 
+            lysarmatur_mangler_elanlegg.append( armatur )
+
+    lysarmatur_mangler_elanlegg = pd.DataFrame( lysarmatur_mangler_elanlegg )
+    lysarmatur_mangler_elanlegg['geometry'] = lysarmatur_mangler_elanlegg['geometri'].apply( wkt.loads )
+    lysarmatur_mangler_elanlegg = gpd.GeoDataFrame( lysarmatur_mangler_elanlegg, geometry='geometry', crs=5973 )
+
     # Lagrer til geopackage 
-    # mappenavn = '/var/www/html/nvdbdata/elanlegg-lysarmatur/'
+    mappenavn = '/var/www/html/nvdbdata/elanlegg-lysarmatur/'
     mappenavn = ''
     filnavn = mappenavn + 'elanlegg_norge.gpkg'
 
@@ -156,6 +251,21 @@ if __name__ == '__main__':
         minGdf.drop( 'relasjoner', 1, inplace=True)
     
     minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
+
+    lysarmatur_mangler_elanlegg.to_file( filnavn, layer='Lysarmatur uten el.anlegg relasjon', driver='GPKG')
+
+
+    # Eget lag: Elektrisk anlegg med bruksområde «Veglys eller manglende verdi» og måling type «umålt» (NY)
+    # Eget lag: Elektrisk anlegg med bruksområde «Veglys eller manglende verdi» og måling type «alle andre enn umålt» (NY)
+    # Eget lag: Elektrisk anlegg med bruksområde «Veglys eller manglende verdi» uten lysarmatur (Ny)
+    el_veglysGDF = elGdf[ (elGdf['ElAnlegg_Bruksområde'].isnull() ) | (elGdf['ElAnlegg_Bruksområde'] == 'Veglys' )]
+    el_veglysGDF[ el_veglysGDF['Måling type'] == 'Umålt'].to_file( filnavn, layer='Veglys anlegg umålt', driver='GPKG')
+    el_veglysGDF[ el_veglysGDF['Måling type'] != 'Umålt'].to_file( filnavn, layer='Veglys anlegg IKKE umålt', driver='GPKG')
+    elGdf[ elGdf['Antall NVDB-objekter lysarmatur'].isnull()].to_file( filnavn , layer='Veglys anlegg uten lysarmatur')
+
+    # Elektriske anlegg uten lysarmatur
+    eldf_mangler_lysarm = eldf[ eldf['Antall NVDB-objekter lysarmatur'].isnull()]
+
 
   # Lagrer til excel 
     # with pd.ExcelWriter( 'elanlegg_lysarmatur_Norge.xlsx') as writer: 
