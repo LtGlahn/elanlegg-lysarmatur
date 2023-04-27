@@ -165,7 +165,7 @@ if __name__ == '__main__':
             
             lysarmatur_relasjonsvurdering = 'ERROR - analyse av relasjoner feilet'
             # Tygger oss gjennom relasjoner: 
-            if not 'foreldre' in armatur['relasjoner'] or len( armatur['relasjoner']['foreldre']) == 0: 
+            if not 'relasjoner' in armatur or not 'foreldre' in armatur['relasjoner'] or len( armatur['relasjoner']['foreldre']) == 0: 
                 lysarmatur_relasjonsvurdering = 'Lysarmatur mangler foreldre'
             elif len( armatur['relasjoner']['foreldre']) > 1: 
                 lysarmatur_relasjonsvurdering = f"Lysarmatur har {len( armatur['relasjoner']['foreldre'])} foreldrerelasjoner"
