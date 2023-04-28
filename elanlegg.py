@@ -224,7 +224,7 @@ if __name__ == '__main__':
 
     # Lagrer til geopackage 
     mappenavn = '/var/www/html/nvdbdata/elanlegg-lysarmatur/'
-    mappenavn = ''
+    # mappenavn = ''
     filnavn = mappenavn + 'elanlegg_norge.gpkg'
 
     eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
