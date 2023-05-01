@@ -260,6 +260,7 @@ if __name__ == '__main__':
     
     minGdf.to_file( filnavn, layer='kartvisning_lysarmatur', driver="GPKG")  
 
+    lysarmatur_mangler_elanlegg.drop( columns='vegsegmenter', inplace=True )
     lysarmatur_mangler_elanlegg.to_file( filnavn, layer='Lysarmatur uten el.anlegg relasjon', driver='GPKG')
 
 
