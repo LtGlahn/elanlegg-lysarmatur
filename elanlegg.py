@@ -1,6 +1,7 @@
 from json.encoder import JSONEncoder
 import pdb
 import json
+from datetime import datetime
 
 import pandas as pd
 import geopandas as gpd
@@ -47,6 +48,8 @@ alleElanlegg = []
 alleLysArmaturer = []
 
 if __name__ == '__main__': 
+    t0 = datetime.now()
+
     elsok = nvdbapiv3.nvdbFagdata( 461 )
     mittfilter = {}
     # mittfilter =  { 'kartutsnitt' : '276891.64,6654048.52,280547.83,6656183.06' } # Debug Kjeller skole 
@@ -127,6 +130,9 @@ if __name__ == '__main__':
             else: 
                 print( 'ubrukelig elanlegg-objekt:', json.dumps( elanlegg, indent=4))
 
+    t1 = datetime.now( ) - t0
+    print( f"Tidsbruk analyse av el.anlegg relasjonstrær: {t1}"  )
+
     # Knar på elanlegg-data
     # Eget lag: Linje som viser kobling mellom armatur og elektrisk anlegg (du har med)
     eldf  = pd.DataFrame( nvdbapiv3.nvdbfagdata2records( alleElanlegg,     vegsegmenter=False, geometri=True ))
@@ -143,12 +149,13 @@ if __name__ == '__main__':
     # Eget lag: Lysarmatur som ikke har kobling til elektrisk anlegg gjerne med informasjon om hva som mangler 
     # tilsvarende skjermdumpen nedenfor (Ny)
     # Henter alle lysarmaturer (med evt filter) 
+    t2 = datetime.now()
     print( "Henter alle lysarmaturer")
-    HeleNVDBLysarmatur = nvdbapiv3.nvdbFagdata( 88, filter=mittfilter).to_records( relasjoner=True )
+    HeleNVDBLysarmatur = nvdbapiv3.nvdbFagdata( 88, filter=mittfilter).to_records( relasjoner=True, geometri=True, vegsegmenter=False  )
 
     # Henter alle belysningspunkt 
     print( "Henter alle belysningspunkt")
-    HeleNVDBBelpunkt = pd.DataFrame( nvdbapiv3.nvdbFagdata( 87, filter=mittfilter ).to_records( relasjoner=True ))
+    HeleNVDBBelpunkt = pd.DataFrame( nvdbapiv3.nvdbFagdata( 87, filter=mittfilter ).to_records( relasjoner=True, geometri=True, vegsegmenter=False  ))
 
     # Henter alle belysningsstrekninger
     print( "Henter alle belysningsstrekninger") 
@@ -156,12 +163,15 @@ if __name__ == '__main__':
                                                         relasjoner=True, geometri=False, vegsegmenter=False ))
 
 
+    t3 = datetime.now()
+    print(f"Tidsbruk nedlasting alle lysarmaturer, bel.punkt og bel.strekninger: {t3-t2}")
     # Fjerner de lysarmaturene som vi vet om allerede (dvs der vi kjenner relasjon el.anlegg->lysarmatur 
     # manglerMor = HELENVDBLysarmatur[ ~HELENVDBLysarmatur['nvdbId'].isin( lysdf['nvdbId']) ]
     # Tygger oss gjennom relasjoner oppover fra lysarmatur
     lysarmatur_mangler_elanlegg = []
+    lysdf_nvdbId = lysdf['nvdbId'].to_list()
     for armatur in HeleNVDBLysarmatur: 
-        if armatur['nvdbId'] not in lysdf['nvdbId']: # Hopper over denna her hvis vi fant lysarmaturen i de relasjonstreene vi har analysert
+        if armatur['nvdbId'] not in lysdf_nvdbId: # Hopper over denna her hvis vi fant lysarmaturen i de relasjonstreene vi har analysert
             
             lysarmatur_relasjonsvurdering = 'ERROR - analyse av relasjoner feilet'
             # Tygger oss gjennom relasjoner: 
@@ -224,7 +234,7 @@ if __name__ == '__main__':
 
     # Lagrer til geopackage 
     mappenavn = '/var/www/html/nvdbdata/elanlegg-lysarmatur/'
-    # mappenavn = ''
+    mappenavn = ''
     filnavn = mappenavn + 'elanlegg_norge.gpkg'
 
     eldf['geometry'] = eldf['geometri'].apply( lambda x : wkt.loads( x ))
@@ -263,7 +273,10 @@ if __name__ == '__main__':
 
     # Elektriske anlegg uten lysarmatur
     eldf_mangler_lysarm = eldf[ eldf['Antall NVDB-objekter lysarmatur'].isnull()]
+    eldf_mangler_lysarm.to_file( filnavn, layer='Elektrisk anlegg uten lysarmatur', driver='GPKG')
 
+
+    print( f"Tidsbruk dataknaing og lagring: {datetime.now()-t3}")
 
   # Lagrer til excel 
     # with pd.ExcelWriter( 'elanlegg_lysarmatur_Norge.xlsx') as writer: 
