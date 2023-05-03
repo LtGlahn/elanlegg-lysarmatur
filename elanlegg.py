@@ -273,7 +273,7 @@ if __name__ == '__main__':
     elGdf[ elGdf['Antall NVDB-objekter lysarmatur'].isnull()].to_file( filnavn , layer='Veglys anlegg uten lysarmatur')
 
     # Elektriske anlegg uten lysarmatur
-    elGdf[ eldelGdff['Antall NVDB-objekter lysarmatur'].isnull()].to_file( filnavn, layer='Elektrisk anlegg uten lysarmatur', driver='GPKG')
+    elGdf[ elGdf['Antall NVDB-objekter lysarmatur'].isnull()].to_file( filnavn, layer='Elektrisk anlegg uten lysarmatur', driver='GPKG')
 
     print( f"Tidsbruk dataknaing og lagring: {datetime.now()-t3}")
 
